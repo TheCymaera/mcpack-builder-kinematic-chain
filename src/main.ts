@@ -1,4 +1,4 @@
-import { Datapack, CustomCommand, Namespace, FunctionAllocator, Command, Duration, Execute, EntitySelector, ScoreboardTag, command } from "npm:mcpack-builder@1.0.9";
+import { Datapack, CustomCommand, Namespace, FunctionAllocator, Command, Duration, Execute, EntitySelector, ScoreboardTag, command } from "npm:mcpack-builder@1";
 import { Vector3 } from "npm:open-utilities@1/core/maths/Vector3.js";
 import { writeFiles } from "./fileUtilities.ts";
 
@@ -75,12 +75,18 @@ funAllocator.addOnLoadFunction(function * createChain() {
 		const rotY = rotX < -90 ? 180 : 0;
 		if (rotX < -90) rotX = -90 - (rotX + 90);
 
-		yield command`summon minecraft:marker ${location.x.toFixed(2)} ${location.y.toFixed(2)} ${location.z.toFixed(2)} {Tags:["sTendril","${segment.id}", "sTendril.${segment.thickness}"], Rotation:[${rotY}f,${rotX}f]}`;
+		yield command`
+			summon minecraft:marker ${location.x.toFixed(2)} ${location.y.toFixed(2)} ${location.z.toFixed(2)} 
+			{Tags:["sTendril","${segment.id}", "sTendril.${segment.thickness}"], Rotation:[${rotY}f,${rotX}f]}
+		`;
 
 		location.add(new Vector3(0,segmentLength,0).rotateX(segment.rotation))
 	}
 
-	yield command`summon minecraft:marker ${location.x.toFixed(2)} ${location.y.toFixed(2)} ${location.z.toFixed(2)} {Tags:["sTendril","${tip.id}"]}`;
+	yield command`
+		summon minecraft:marker ${location.x.toFixed(2)} ${location.y.toFixed(2)} ${location.z.toFixed(2)} 
+		{Tags:["sTendril","${tip.id}"]}
+	`;
 });
 
 funAllocator.addOnTickFunction(function * drawChain() {
@@ -89,7 +95,10 @@ funAllocator.addOnTickFunction(function * drawChain() {
 			const radius = thickness / 2;
 			const bubbleAmount = Math.max(1, thickness * 20);
 
-	 		yield command`execute at @e[tag=sTendril.${name}] run particle minecraft:bubble ^ ^ ^${i} ${radius} ${radius} ${radius} 0 ${bubbleAmount}`;
+	 		yield command`
+				execute at @e[tag=sTendril.${name}] run 
+				particle minecraft:bubble ^ ^ ^${i} ${radius} ${radius} ${radius} 0 ${bubbleAmount}
+			`;
 	 	}
 	 }
 });
@@ -98,7 +107,14 @@ const moveChain = funAllocator.function(function * moveChain() {
 	// move each segment to target
 	let target = tip;
 	for (const segment of [...segments].reverse()) {
-		yield command`execute as @e[tag=${segment.id}] at @s facing entity @e[tag=${target.id}] feet positioned as @e[tag=${target.id}] run tp @s ^ ^ ^${-segmentLength} ~ ~`;
+		yield command`
+			execute 
+			as @e[tag=${segment.id}] 
+			at @s 
+			facing entity @e[tag=${target.id}] feet positioned 
+			as @e[tag=${target.id}] 
+			run tp @s ^ ^ ^${-segmentLength} ~ ~
+		`;
 
 		target = segment;
 	}
@@ -109,13 +125,24 @@ const moveChain = funAllocator.function(function * moveChain() {
 	for (let i = 0; i < segments.length; i++) {
 		const parent = segments[i]!;
 		const segment = segments[i+1] ?? tip;
-		yield command`execute as @e[tag=${parent.id}] at @s facing entity @e[tag=${segment.id}] feet positioned ^ ^ ^${segmentLength} run tp @e[tag=${segment.id}] ~ ~ ~`;
+		yield command`
+			execute 
+			as @e[tag=${parent.id}] 
+			at @s 
+			facing entity @e[tag=${segment.id}] feet 
+			positioned ^ ^ ^${segmentLength} 
+			run tp @e[tag=${segment.id}] ~ ~ ~
+		`;
 	}
 });
 
 function *arc(targetId: string, lift: number) {
 	for (let i = 1; i < 5; i++) {
-		yield command`execute as @e[tag=${targetId}] at @s if entity @e[tag=${tip.id},distance=${i}..] run tp @s ~ ~${lift / 4} ~`;
+		yield command`
+			execute as @e[tag=${targetId}] at @s 
+			if entity @e[tag=${tip.id},distance=${i}..] 
+			run tp @s ~ ~${lift / 4} ~
+		`;
 	}
 }
 
@@ -127,18 +154,28 @@ function * follow(
 	onReach?: ()=>Iterable<Command>
 ) {
 	yield new CustomCommand(`execute as @e[tag=${tip.id}] at @s[tag=!sTendril.frozen] run ` + funAllocator.function(function * follow() {
-		yield command`execute facing entity @e[tag=${targetId},distance=${chaseDistance}..] feet run tp @s ^ ^ ^${speed}`;
-		yield command`execute if entity @e[tag=${targetId},distance=${chaseDistance}..] run playsound minecraft:block.honey_block.slide block @a ~ ~ ~ 1 .5`;
+		// move towards target
+		yield command`
+			execute facing entity @e[tag=${targetId},distance=${chaseDistance}..] feet 
+			run tp @s ^ ^ ^${speed}
+		`;
+
+		// play movement sound
+		yield command`
+			execute if entity @e[tag=${targetId},distance=${chaseDistance}..] 
+			run playsound minecraft:block.honey_block.slide block @a ~ ~ ~ 1 .5
+		`;
 
 		
 		if (chaseSpeed != speed) {
 			yield command`execute facing entity @e[tag=${targetId},distance=${speed}..${chaseDistance}] feet run tp @s ^ ^ ^${chaseSpeed}`;
 		}
 
+		// reached target
 		yield new CustomCommand(
 			`execute at @e[tag=${targetId},distance=..${chaseSpeed}] ` +
 			`run ` + (!onReach ? `tp @s ~ ~ ~` : funAllocator.function(function * reachTarget() {
-				yield new CustomCommand(`tp @s ~ ~ ~`);
+				yield command`tp @s ~ ~ ~`;
 				yield * onReach?.() ?? [];
 			}).run().buildCommand())
 		);
@@ -179,7 +216,7 @@ const playIdleSound = new Execute().at(tip.selector()).run(
 
 const scheduleIdleSound = funAllocator.addOnLoadFunction(function * idleSound() {
 	yield playIdleSound;
-	yield scheduleIdleSound.schedule(Duration.seconds(4));
+	yield scheduleIdleSound.scheduleReplace(Duration.seconds(4));
 });
 
 
@@ -203,8 +240,8 @@ funAllocator.addOnTickFunction(function * followChicken() {
 	.run(funAllocator.function(function * acquireChicken() {
 		yield command`tag @s add sTendril.chickenTarget`;
 		yield freeze;
-		yield unfreeze.schedule(Duration.ticks(30));
-		yield playAcquireSound.schedule(Duration.ticks(20));
+		yield unfreeze.scheduleReplace(Duration.ticks(30));
+		yield playAcquireSound.scheduleReplace(Duration.ticks(20));
 	}).run());
 
 
@@ -222,7 +259,7 @@ funAllocator.addOnTickFunction(function * followChicken() {
 		
 		// freeze
 		yield freeze;
-		yield unfreeze.schedule(Duration.ticks(10));
+		yield unfreeze.scheduleReplace(Duration.ticks(10));
 	});
 });
 
@@ -232,17 +269,18 @@ funAllocator.addOnTickFunction(function * followChicken() {
 funAllocator.addOnTickFunction(function * followMouth() {
 	yield command`kill @e[tag=sTendril.mouthTarget]`;
 
-	yield new CustomCommand(
-		`execute if entity @e[tag=sTendril.chickenHeld] ` + 
-		`run summon minecraft:marker ${mouthLocation.x.toFixed(2)} ${mouthLocation.y.toFixed(2)} ${mouthLocation.z.toFixed(2)} {Tags:["sTendril.mouthTarget"]}`
-	);
+	yield command`
+		execute if entity @e[tag=sTendril.chickenHeld] run 
+		summon minecraft:marker ${mouthLocation.x.toFixed(2)} ${mouthLocation.y.toFixed(2)} ${mouthLocation.z.toFixed(2)} 
+		{Tags:["sTendril.mouthTarget"]}
+	`;
 
 	yield * arc("sTendril.mouthTarget", 3);
 	yield * follow("sTendril.mouthTarget", moveSpeed, undefined, undefined, function * () {
 		yield command`kill @e[tag=sTendril.chickenHeld]`;
 		yield command`kill @e[type=minecraft:item,nbt={Item:{id:"minecraft:chicken"}}]`;
 		yield playBiteSound;
-		yield playDigestSound.schedule(Duration.ticks(20));
+		yield playDigestSound.scheduleReplace(Duration.ticks(20));
 	});
 
 	// tp chicken to tip
@@ -252,7 +290,10 @@ funAllocator.addOnTickFunction(function * followMouth() {
 
 funAllocator.addOnTickFunction(function * followCarrot() {
 	yield command`kill @e[tag=sTendril.carrotTarget]`;
-	yield command`execute as @p[nbt={SelectedItem:{id:"minecraft:carrot_on_a_stick"}}] at @s run summon minecraft:marker ^ ^1.5 ^3 {Tags:["sTendril.carrotTarget"]}`;
+	yield command`
+		execute as @p[nbt={SelectedItem:{id:"minecraft:carrot_on_a_stick"}}] at @s run 
+		summon minecraft:marker ^ ^1.5 ^3 {Tags:["sTendril.carrotTarget"]}
+	`;
 
 	yield * arc("sTendril.carrotTarget", 1);
 	yield * follow("sTendril.carrotTarget", carrotFollowSpeed);
