@@ -156,7 +156,7 @@ function * follow(
 	yield new CustomCommand(`execute as @e[tag=${tip.id}] at @s[tag=!sTendril.frozen] run ` + funAllocator.function(function * follow() {
 		// move towards target
 		yield command`
-			execute facing entity @e[tag=${targetId},distance=${chaseDistance}..] feet 
+			execute facing entity @e[tag=${targetId},distance=${chaseDistance}..] eyes 
 			run tp @s ^ ^ ^${speed}
 		`;
 
@@ -168,18 +168,18 @@ function * follow(
 
 		
 		if (chaseSpeed != speed) {
-			yield command`execute facing entity @e[tag=${targetId},distance=${speed}..${chaseDistance}] feet run tp @s ^ ^ ^${chaseSpeed}`;
+			yield command`execute facing entity @e[tag=${targetId},distance=${speed}..${chaseDistance}] eyes run tp @s ^ ^ ^${chaseSpeed}`;
 		}
-
-		// reached target
-		yield new CustomCommand(
-			`execute at @e[tag=${targetId},distance=..${chaseSpeed}] ` +
-			`run ` + (!onReach ? `tp @s ~ ~ ~` : funAllocator.function(function * reachTarget() {
-				yield command`tp @s ~ ~ ~`;
-				yield * onReach?.() ?? [];
-			}).run().buildCommand())
-		);
 	}).run().buildCommand());
+
+	// reached target
+	yield new CustomCommand(
+		`execute as @e[tag=${targetId}] at @s anchored eyes if entity @e[tag=${tip.id},distance=..${chaseSpeed * 1.2}] ` +
+		`run ` + (!onReach ? `tp @s ~ ~ ~` : funAllocator.function(function * reachTarget() {
+			yield command`tp @s ~ ~ ~`;
+			yield * onReach?.() ?? [];
+		}).run().buildCommand())
+	);
 }
 
 const frozenScoreboardTag = new ScoreboardTag("sTendril.frozen");
@@ -284,7 +284,7 @@ funAllocator.addOnTickFunction(function * followMouth() {
 	});
 
 	// tp chicken to tip
-	yield command`execute as @e[tag=${tip.id}] at @s run tp @e[tag=sTendril.chickenHeld] ~ ~ ~`;
+	yield command`execute as @e[tag=${tip.id}] at @s run tp @e[tag=sTendril.chickenHeld] ~ ~-.6 ~`;
 });
 
 
