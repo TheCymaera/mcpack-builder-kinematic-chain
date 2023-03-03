@@ -1,0 +1,31 @@
+{
+	"compilerOptions": {
+		"rootDir": "src",
+		"outDir": "dst",
+		
+		"module": "ESNext",
+		"target": "ESNext",
+
+		"moduleResolution": "nodenext",
+		
+		"strictNullChecks": true,
+		"noImplicitThis": true,
+		"noImplicitReturns": true,
+		"noUncheckedIndexedAccess": true,
+		"alwaysStrict": true,
+
+		"isolatedModules": true,
+		"importsNotUsedAsValues": "preserve",
+		
+		"preserveConstEnums": true,
+		"declaration": true,
+
+		"skipDefaultLibCheck": true,
+
+		"lib": ["ESNext", "DOM", "DOM.Iterable"],
+
+		"baseUrl": ".",
+		"allowImportingTsExtensions": true,
+		"noEmit": true,
+	}
+}
