@@ -1,6 +1,6 @@
-import { Datapack, CustomCommand, Namespace, FunctionAllocator, Command, Duration, Execute, EntitySelector, ScoreboardTag, command } from "npm:mcpack-builder@1";
+import { Datapack, CustomCommand, Namespace, Duration, Execute, EntitySelector, ScoreboardTag, command,  NamespacedIDGenerator, Command } from "npm:mcpack-builder@alpha";
 import { Vector3 } from "npm:open-utilities@1/core/maths/Vector3.js";
-import { writeFiles } from "./fileUtilities.ts";
+import { emptyFolder, writeFiles } from "./fileUtilities.ts";
 
 // output
 const outputPath = "pack";
@@ -8,7 +8,7 @@ const datapack = new Datapack;
 
 // config
 const namespace = new Namespace("kinematic-chain");
-const funAllocator = new FunctionAllocator({ datapack, namespace: namespace.id("internal") });
+const uid = new NamespacedIDGenerator(namespace.id("internal"));
 
 const thicknesses = {
 	thin: 0.0,
@@ -24,7 +24,6 @@ const carrotFollowSpeed = 5.0 / 20;
 const moveSpeed = 3.0 / 20;
 const chaseSpeed = 12.0 / 20;
 const chaseDistance = 3.5;
-
 
 class Segment {
 	constructor(public id: string, public thickness: string, public rotation: number) {}
@@ -58,15 +57,16 @@ const segments = [
 const tip = new Segment("sTendril.tip","",0);
 
 
-datapack.setPackMeta({
+datapack.packMeta = {
 	pack: {
 		pack_format: 7,
 		description: "Kinematic Chain for Minecraft"
 	},
-});
+};
 
-
-funAllocator.addOnLoadFunction(function * createChain() {
+const load = datapack.mcfunction(uid.create(`createChain`))
+.setOnLoad(true)
+.set(function * () {
 	yield command`kill @e[tag=sTendril]`;
 
 	const location = segmentBase.clone();
@@ -89,7 +89,17 @@ funAllocator.addOnLoadFunction(function * createChain() {
 	`;
 });
 
-funAllocator.addOnTickFunction(function * drawChain() {
+datapack.mcfunction(uid.create(`dedupe`))
+.setOnTick(true)
+.set(function * () {
+	// due to chunk loading issues, there can be multiple copies of the chain
+	yield command`execute as @e[tag=sTendril.tip] store result entity @s data.count byte 1 if entity @e[tag=sTendril.tip]`;
+	yield command`execute if entity @e[tag=sTendril.tip,nbt=!{data:{count:1b}}] run function ${load.namespacedID}`
+});
+
+datapack.mcfunction(uid.create(`drawChain`))
+.setOnTick(true)
+.set(function * () {
 	 for (const [name, thickness] of Object.entries(thicknesses)) {
 	 	for (let i = 0; i < segmentLength; i += .2) {
 			const radius = thickness / 2;
@@ -103,7 +113,8 @@ funAllocator.addOnTickFunction(function * drawChain() {
 	 }
 });
 
-const moveChain = funAllocator.function(function * moveChain() {
+const moveChain = datapack.mcfunction(uid.create(`moveChain`))
+.set(function * moveChain() {
 	// move each segment to target
 	let target = tip;
 	for (const segment of [...segments].reverse()) {
@@ -120,7 +131,7 @@ const moveChain = funAllocator.function(function * moveChain() {
 	}
 
 	// re-anchor chain
-	yield command`tp @e[tag=${segments[0]!.id}] ${segmentBase.x} ${segmentBase.y} ${segmentBase.z}`;
+	yield command`tp @e[tag=${segments[0]!.id}] ${segmentBase.x.toFixed(2)} ${segmentBase.y.toFixed(2)} ${segmentBase.z.toFixed(2)}`;
 
 	for (let i = 0; i < segments.length; i++) {
 		const parent = segments[i]!;
@@ -153,7 +164,7 @@ function * follow(
 	chaseSpeed = speed, 
 	onReach?: ()=>Iterable<Command>
 ) {
-	yield new CustomCommand(`execute as @e[tag=${tip.id}] at @s[tag=!sTendril.frozen] run ` + funAllocator.function(function * follow() {
+	yield new CustomCommand(`execute as @e[tag=${tip.id}] at @s[tag=!sTendril.frozen] run ` + datapack.mcfunction(uid.create()).set(function * () {
 		// move towards target
 		yield command`
 			execute facing entity @e[tag=${targetId},distance=${chaseDistance}..] eyes 
@@ -175,10 +186,10 @@ function * follow(
 	// reached target
 	yield new CustomCommand(
 		`execute as @e[tag=${targetId}] at @s anchored eyes if entity @e[tag=${tip.id},distance=..${chaseSpeed * 1.2}] ` +
-		`run ` + (!onReach ? `tp @s ~ ~ ~` : funAllocator.function(function * reachTarget() {
+		`run ` + datapack.mcfunction(uid.create(`reachedTarget`)).set(function * reachTarget() {
 			yield command`tp @s ~ ~ ~`;
 			yield * onReach?.() ?? [];
-		}).run().buildCommand())
+		}).inline().buildCommand()
 	);
 }
 
@@ -186,17 +197,20 @@ const frozenScoreboardTag = new ScoreboardTag("sTendril.frozen");
 
 const freeze = frozenScoreboardTag.add(tip.selector());
 
-const unfreeze = funAllocator.function(function * unfreeze() {
+const unfreeze = datapack.mcfunction(uid.create(`unfreeze`))
+.set(function * unfreeze() {
 	yield frozenScoreboardTag.remove(tip.selector());
 });
 
-const playAcquireSound = funAllocator.function(function * playAcquireSound() {
+const playAcquireSound = datapack.mcfunction(uid.create(`playAcquireSound`))
+.set(function * () {
 	yield new Execute().at(tip.selector()).run(
 		command`playsound minecraft:block.sculk_sensor.clicking block @a ~ ~ ~ 1 0`
 	);
 });
 
-const playDigestSound = funAllocator.function(function * playDigestSound() {
+const playDigestSound = datapack.mcfunction(uid.create(`playDigestSound`))
+.set(function * () {
 	yield new Execute().at(tip.selector()).run(
 		command`playsound minecraft:block.sculk_sensor.hit block @a ~ ~ ~ 1 0`
 	);
@@ -214,30 +228,36 @@ const playIdleSound = new Execute().at(tip.selector()).run(
 	command`playsound minecraft:block.sculk_sensor.clicking_stop block @a ~ ~ ~ 1 0.1`
 );
 
-const scheduleIdleSound = funAllocator.addOnLoadFunction(function * idleSound() {
+const scheduleIdleSound = datapack.mcfunction(uid.create("scheduleIdleSound"))
+.setOnLoad(true);
+scheduleIdleSound.set(function * idleSound() {
 	yield playIdleSound;
 	yield scheduleIdleSound.scheduleReplace(Duration.seconds(4));
 });
 
 
-funAllocator.addOnTickFunction(function * followChicken() {
+datapack.mcfunction(uid.create(`followChicken`))
+.setOnTick(true)
+.set(function * followChicken() {
 	// find a chicken target
 	yield new Execute()
 	.at(tip.selector())
-	.unlessExists(
+	.unless(
 		EntitySelector.allEntities()
 		.hasScoreboardTag("sTendril.chickenTarget")
+		.exists()
 	)
-	.unlessExists(
+	.unless(
 		EntitySelector.allEntities()
 		.hasScoreboardTag("sTendril.chickenHeld")
+		.exists()
 	)
 	.as(
 		EntitySelector.allEntities()
 		.isType("minecraft:chicken")
 		.sortNearest().limit(1)
 	)
-	.run(funAllocator.function(function * acquireChicken() {
+	.run(datapack.mcfunction(uid.create()).set(function * () {
 		yield command`tag @s add sTendril.chickenTarget`;
 		yield freeze;
 		yield unfreeze.scheduleReplace(Duration.ticks(30));
@@ -266,7 +286,9 @@ funAllocator.addOnTickFunction(function * followChicken() {
 
 
 
-funAllocator.addOnTickFunction(function * followMouth() {
+datapack.mcfunction(uid.create(`followMouth`))
+.setOnTick(true)
+.set(function * () {
 	yield command`kill @e[tag=sTendril.mouthTarget]`;
 
 	yield command`
@@ -288,7 +310,9 @@ funAllocator.addOnTickFunction(function * followMouth() {
 });
 
 
-funAllocator.addOnTickFunction(function * followCarrot() {
+datapack.mcfunction(uid.create(`followCarrot`))
+.setOnTick(true)
+.set(function * () {
 	yield command`kill @e[tag=sTendril.carrotTarget]`;
 	yield command`
 		execute as @p[nbt={SelectedItem:{id:"minecraft:carrot_on_a_stick"}}] at @s run 
@@ -305,5 +329,6 @@ funAllocator.addOnTickFunction(function * followCarrot() {
 
 
 console.log("Writing files...");
-await writeFiles(outputPath, datapack.build());
+await emptyFolder(outputPath);
+await writeFiles(outputPath, datapack.build().files);
 console.log("Complete!");

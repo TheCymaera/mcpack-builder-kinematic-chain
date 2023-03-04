@@ -1,6 +1,14 @@
 import { resolve } from "node:path";
 import { promises as fs } from "node:fs";
 
+export async function emptyFolder(folder: string) {
+	try {
+		await fs.rmdir(folder, { recursive: true });
+	} catch {
+		// do nothing
+	}
+}
+
 export function writeFiles(folder: string, files: Iterable<[string, string]>) {
 	const promises: Promise<unknown>[] = [];
 	for (const [path, text] of files) {

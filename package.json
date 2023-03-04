@@ -2,7 +2,7 @@
 	"private": true,
 	"_comment": "For running scripts only.",
 	"scripts": {
-		"build": "deno run --allow-write=pack src/main.ts",
+		"build": "deno run --allow-read=pack --allow-write=pack src/main.ts",
 		"symlink": "deno run --allow-read --allow-write src/createSymlink.ts"
 	}
 }
