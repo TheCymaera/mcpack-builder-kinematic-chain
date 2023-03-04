@@ -1,4 +1,3 @@
-import { resolve } from "node:path";
 import { promises as fs } from "node:fs";
 
 export async function emptyFolder(folder: string) {
@@ -23,12 +22,4 @@ export function writeFiles(folder: string, files: Iterable<[string, string]>) {
 	}
 
 	return Promise.all(promises);
-}
-
-export function createSymlink(original: string, link: string) {
-	return fs.symlink(original, link);
-}
-
-export function realPath(path: string) {
-	return Promise.resolve(resolve(path));
 }

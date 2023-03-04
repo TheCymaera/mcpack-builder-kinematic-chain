@@ -1,4 +1,4 @@
-import { Datapack, CustomCommand, Namespace, Duration, Execute, EntitySelector, ScoreboardTag, command,  NamespacedIDGenerator, Command } from "npm:mcpack-builder@alpha";
+import { Datapack, CustomCommand, Namespace, Duration, Execute, EntitySelector, ScoreboardTag, command,  Command } from "npm:mcpack-builder@alpha";
 import { Vector3 } from "npm:open-utilities@1/core/maths/Vector3.js";
 import { emptyFolder, writeFiles } from "./fileUtilities.ts";
 
@@ -8,7 +8,7 @@ const datapack = new Datapack;
 
 // config
 const namespace = new Namespace("kinematic-chain");
-const uid = new NamespacedIDGenerator(namespace.id("internal"));
+datapack.internalNamespace = namespace.id("internal");
 
 const thicknesses = {
 	thin: 0.0,
@@ -64,7 +64,7 @@ datapack.packMeta = {
 	},
 };
 
-const load = datapack.mcfunction(uid.create(`createChain`))
+const load = datapack.internalMcfunction(`createChain`)
 .setOnLoad(true)
 .set(function * () {
 	yield command`kill @e[tag=sTendril]`;
@@ -89,7 +89,7 @@ const load = datapack.mcfunction(uid.create(`createChain`))
 	`;
 });
 
-datapack.mcfunction(uid.create(`dedupe`))
+datapack.internalMcfunction(`dedupe`)
 .setOnTick(true)
 .set(function * () {
 	// due to chunk loading issues, there can be multiple copies of the chain
@@ -97,7 +97,7 @@ datapack.mcfunction(uid.create(`dedupe`))
 	yield command`execute if entity @e[tag=sTendril.tip,nbt=!{data:{count:1b}}] run function ${load.namespacedID}`
 });
 
-datapack.mcfunction(uid.create(`drawChain`))
+datapack.internalMcfunction(`drawChain`)
 .setOnTick(true)
 .set(function * () {
 	 for (const [name, thickness] of Object.entries(thicknesses)) {
@@ -113,7 +113,7 @@ datapack.mcfunction(uid.create(`drawChain`))
 	 }
 });
 
-const moveChain = datapack.mcfunction(uid.create(`moveChain`))
+const moveChain = datapack.internalMcfunction(`moveChain`)
 .set(function * moveChain() {
 	// move each segment to target
 	let target = tip;
@@ -164,7 +164,9 @@ function * follow(
 	chaseSpeed = speed, 
 	onReach?: ()=>Iterable<Command>
 ) {
-	yield new CustomCommand(`execute as @e[tag=${tip.id}] at @s[tag=!sTendril.frozen] run ` + datapack.mcfunction(uid.create()).set(function * () {
+	const name = targetId.replace("sTendril.", "");
+
+	yield new CustomCommand(`execute as @e[tag=${tip.id}] at @s[tag=!sTendril.frozen] run ` + datapack.internalMcfunction("follow_" + name).set(function * () {
 		// move towards target
 		yield command`
 			execute facing entity @e[tag=${targetId},distance=${chaseDistance}..] eyes 
@@ -176,7 +178,6 @@ function * follow(
 			execute if entity @e[tag=${targetId},distance=${chaseDistance}..] 
 			run playsound minecraft:block.honey_block.slide block @a ~ ~ ~ 1 .5
 		`;
-
 		
 		if (chaseSpeed != speed) {
 			yield command`execute facing entity @e[tag=${targetId},distance=${speed}..${chaseDistance}] eyes run tp @s ^ ^ ^${chaseSpeed}`;
@@ -186,10 +187,10 @@ function * follow(
 	// reached target
 	yield new CustomCommand(
 		`execute as @e[tag=${targetId}] at @s anchored eyes if entity @e[tag=${tip.id},distance=..${chaseSpeed * 1.2}] ` +
-		`run ` + datapack.mcfunction(uid.create(`reachedTarget`)).set(function * reachTarget() {
+		`run ` + datapack.internalMcfunction("reached_" + name).set(function * reachTarget() {
 			yield command`tp @s ~ ~ ~`;
 			yield * onReach?.() ?? [];
-		}).inline().buildCommand()
+		}).run().buildCommand()
 	);
 }
 
@@ -197,19 +198,19 @@ const frozenScoreboardTag = new ScoreboardTag("sTendril.frozen");
 
 const freeze = frozenScoreboardTag.add(tip.selector());
 
-const unfreeze = datapack.mcfunction(uid.create(`unfreeze`))
+const unfreeze = datapack.internalMcfunction(`unfreeze`)
 .set(function * unfreeze() {
 	yield frozenScoreboardTag.remove(tip.selector());
 });
 
-const playAcquireSound = datapack.mcfunction(uid.create(`playAcquireSound`))
+const playAcquireSound = datapack.internalMcfunction(`playAcquireSound`)
 .set(function * () {
 	yield new Execute().at(tip.selector()).run(
 		command`playsound minecraft:block.sculk_sensor.clicking block @a ~ ~ ~ 1 0`
 	);
 });
 
-const playDigestSound = datapack.mcfunction(uid.create(`playDigestSound`))
+const playDigestSound = datapack.internalMcfunction(`playDigestSound`)
 .set(function * () {
 	yield new Execute().at(tip.selector()).run(
 		command`playsound minecraft:block.sculk_sensor.hit block @a ~ ~ ~ 1 0`
@@ -228,7 +229,7 @@ const playIdleSound = new Execute().at(tip.selector()).run(
 	command`playsound minecraft:block.sculk_sensor.clicking_stop block @a ~ ~ ~ 1 0.1`
 );
 
-const scheduleIdleSound = datapack.mcfunction(uid.create("scheduleIdleSound"))
+const scheduleIdleSound = datapack.internalMcfunction("scheduleIdleSound")
 .setOnLoad(true);
 scheduleIdleSound.set(function * idleSound() {
 	yield playIdleSound;
@@ -236,9 +237,9 @@ scheduleIdleSound.set(function * idleSound() {
 });
 
 
-datapack.mcfunction(uid.create(`followChicken`))
+datapack.internalMcfunction(`locateChicken`)
 .setOnTick(true)
-.set(function * followChicken() {
+.set(function*() {
 	// find a chicken target
 	yield new Execute()
 	.at(tip.selector())
@@ -257,7 +258,7 @@ datapack.mcfunction(uid.create(`followChicken`))
 		.isType("minecraft:chicken")
 		.sortNearest().limit(1)
 	)
-	.run(datapack.mcfunction(uid.create()).set(function * () {
+	.run(datapack.internalMcfunction("acquireChicken").set(function * () {
 		yield command`tag @s add sTendril.chickenTarget`;
 		yield freeze;
 		yield unfreeze.scheduleReplace(Duration.ticks(30));
@@ -286,7 +287,7 @@ datapack.mcfunction(uid.create(`followChicken`))
 
 
 
-datapack.mcfunction(uid.create(`followMouth`))
+datapack.internalMcfunction(`locateMouth`)
 .setOnTick(true)
 .set(function * () {
 	yield command`kill @e[tag=sTendril.mouthTarget]`;
@@ -310,7 +311,7 @@ datapack.mcfunction(uid.create(`followMouth`))
 });
 
 
-datapack.mcfunction(uid.create(`followCarrot`))
+datapack.internalMcfunction(`locateCarrot`)
 .setOnTick(true)
 .set(function * () {
 	yield command`kill @e[tag=sTendril.carrotTarget]`;
