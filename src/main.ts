@@ -92,7 +92,7 @@ const load = datapack.internalMcfunction(`createChain`)
 datapack.internalMcfunction(`dedupe`)
 .setOnTick(true)
 .set(function * () {
-	// due to chunk unloading, there can be multiple copies of the chain
+	// due to chunk loading, there can be multiple copies of the chain when the world first loads.
 	yield command`execute as @e[tag=sTendril.tip] store result entity @s data.count byte 1 if entity @e[tag=sTendril.tip]`;
 	yield command`execute if entity @e[tag=sTendril.tip,nbt=!{data:{count:1b}}] run function ${load.namespacedID}`
 });
