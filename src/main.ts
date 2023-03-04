@@ -1,4 +1,4 @@
-import { Datapack, CustomCommand, Namespace, Duration, Execute, EntitySelector, ScoreboardTag, command,  Command } from "npm:mcpack-builder@alpha";
+import { Coordinate, Datapack, CustomCommand, Namespace, Duration, Execute, ScoreboardTag, command,  Command, entities } from "npm:mcpack-builder@alpha";
 import { Vector3 } from "npm:open-utilities@1/core/maths/Vector3.js";
 import { emptyFolder, writeFiles } from "./fileUtilities.ts";
 
@@ -29,7 +29,7 @@ class Segment {
 	constructor(public id: string, public thickness: string, public rotation: number) {}
 
 	selector() {
-		return EntitySelector.allEntities().hasScoreboardTag(this.id);
+		return entities`@e`.hasScoreboardTag(this.id);
 	}
 }
 
@@ -76,15 +76,15 @@ const load = datapack.internalMcfunction(`createChain`)
 		if (rotX < -90) rotX = -90 - (rotX + 90);
 
 		yield command`
-			summon minecraft:marker ${location.x.toFixed(2)} ${location.y.toFixed(2)} ${location.z.toFixed(2)} 
+			summon minecraft:marker ${Coordinate.fromVector(location, true)} 
 			{Tags:["sTendril","${segment.id}", "sTendril.${segment.thickness}"], Rotation:[${rotY}f,${rotX}f]}
 		`;
 
 		location.add(new Vector3(0,segmentLength,0).rotateX(segment.rotation))
 	}
-
+	
 	yield command`
-		summon minecraft:marker ${location.x.toFixed(2)} ${location.y.toFixed(2)} ${location.z.toFixed(2)} 
+		summon minecraft:marker ${Coordinate.fromVector(location, true)} 
 		{Tags:["sTendril","${tip.id}"]}
 	`;
 });
@@ -92,7 +92,7 @@ const load = datapack.internalMcfunction(`createChain`)
 datapack.internalMcfunction(`dedupe`)
 .setOnTick(true)
 .set(function * () {
-	// due to chunk loading issues, there can be multiple copies of the chain
+	// due to chunk unloading, there can be multiple copies of the chain
 	yield command`execute as @e[tag=sTendril.tip] store result entity @s data.count byte 1 if entity @e[tag=sTendril.tip]`;
 	yield command`execute if entity @e[tag=sTendril.tip,nbt=!{data:{count:1b}}] run function ${load.namespacedID}`
 });
@@ -131,7 +131,7 @@ const moveChain = datapack.internalMcfunction(`moveChain`)
 	}
 
 	// re-anchor chain
-	yield command`tp @e[tag=${segments[0]!.id}] ${segmentBase.x.toFixed(2)} ${segmentBase.y.toFixed(2)} ${segmentBase.z.toFixed(2)}`;
+	yield command`tp @e[tag=${segments[0]!.id}] ${Coordinate.fromVector(segmentBase, true)}`;
 
 	for (let i = 0; i < segments.length; i++) {
 		const parent = segments[i]!;
@@ -244,19 +244,13 @@ datapack.internalMcfunction(`locateChicken`)
 	yield new Execute()
 	.at(tip.selector())
 	.unless(
-		EntitySelector.allEntities()
-		.hasScoreboardTag("sTendril.chickenTarget")
-		.exists()
+		entities`@a`.hasScoreboardTag("sTendril.chickenTarget").exists()
 	)
 	.unless(
-		EntitySelector.allEntities()
-		.hasScoreboardTag("sTendril.chickenHeld")
-		.exists()
+		entities`@a`.hasScoreboardTag("sTendril.chickenHeld").exists()
 	)
 	.as(
-		EntitySelector.allEntities()
-		.isType("minecraft:chicken")
-		.sortNearest().limit(1)
+		entities`@e[type=minecraft:chicken]`.sortNearest().limit(1)
 	)
 	.run(datapack.internalMcfunction("acquireChicken").set(function * () {
 		yield command`tag @s add sTendril.chickenTarget`;
@@ -294,7 +288,7 @@ datapack.internalMcfunction(`locateMouth`)
 
 	yield command`
 		execute if entity @e[tag=sTendril.chickenHeld] run 
-		summon minecraft:marker ${mouthLocation.x.toFixed(2)} ${mouthLocation.y.toFixed(2)} ${mouthLocation.z.toFixed(2)} 
+		summon minecraft:marker ${Coordinate.fromVector(mouthLocation, true)} 
 		{Tags:["sTendril.mouthTarget"]}
 	`;
 
