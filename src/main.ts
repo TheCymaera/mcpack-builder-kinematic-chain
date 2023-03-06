@@ -1,4 +1,4 @@
-import { Coordinate, Datapack, CustomCommand, Namespace, Duration, Execute, ScoreboardTag, command,  Command, entities } from "npm:mcpack-builder@alpha";
+import { Coordinate, Datapack, Namespace, Duration, ScoreboardTag, command, Command, entities, execute } from "npm:mcpack-builder@alpha";
 import { Vector3 } from "npm:open-utilities@1/core/maths/Vector3.js";
 import { emptyFolder, writeFiles } from "./fileUtilities.ts";
 
@@ -11,13 +11,13 @@ const namespace = new Namespace("kinematic-chain");
 datapack.internalNamespace = namespace.id("internal");
 
 const thicknesses = {
-	thin: 0.0,
-	mid: 0.1,
-	thick: 0.2,
-	thickest: 0.3,
+	"thin": 0.0,
+	"mid": 0.1,
+	"thick": 0.2,
+	"thickest": 0.3,
 }
 
-const segmentBase = new Vector3(222.0, 51.0, -14.0);
+const rootLocation = new Vector3(222.0, 51.0, -14.0);
 const mouthLocation = new Vector3(220.0, 51.0, -13.0).add(new Vector3(.5, .9, .5));
 const segmentLength = .5;
 const carrotFollowSpeed = 5.0 / 20;
@@ -69,7 +69,7 @@ const load = datapack.internalMcfunction(`createChain`)
 .set(function * () {
 	yield command`kill @e[tag=sTendril]`;
 
-	const location = segmentBase.clone();
+	const location = rootLocation.clone();
 	for (const segment of segments) {
 		let rotX = segment.rotation * 180 / Math.PI - 90;
 		const rotY = rotX < -90 ? 180 : 0;
@@ -93,8 +93,8 @@ datapack.internalMcfunction(`dedupe`)
 .setOnTick(true)
 .set(function * () {
 	// due to chunk loading, there can be multiple copies of the chain when the world first loads.
-	yield command`execute as @e[tag=sTendril.tip] store result entity @s data.count byte 1 if entity @e[tag=sTendril.tip]`;
-	yield command`execute if entity @e[tag=sTendril.tip,nbt=!{data:{count:1b}}] run function ${load.namespacedID}`
+	yield execute`as @e[tag=sTendril.tip] store result entity @s data.count byte 1 if entity @e[tag=sTendril.tip]`;
+	yield execute`if entity @e[tag=sTendril.tip,nbt=!{data:{count:1b}}]`.run(load.run());
 });
 
 datapack.internalMcfunction(`drawChain`)
@@ -131,7 +131,7 @@ const moveChain = datapack.internalMcfunction(`moveChain`)
 	}
 
 	// re-anchor chain
-	yield command`tp @e[tag=${segments[0]!.id}] ${Coordinate.fromVector(segmentBase, true)}`;
+	yield command`tp @e[tag=${segments[0]!.id}] ${Coordinate.fromVector(rootLocation, true)}`;
 
 	for (let i = 0; i < segments.length; i++) {
 		const parent = segments[i]!;
@@ -166,31 +166,32 @@ function * follow(
 ) {
 	const name = targetId.replace("sTendril.", "");
 
-	yield new CustomCommand(`execute as @e[tag=${tip.id}] at @s[tag=!sTendril.frozen] run ` + datapack.internalMcfunction("follow_" + name).set(function * () {
-		// move towards target
-		yield command`
-			execute facing entity @e[tag=${targetId},distance=${chaseDistance}..] eyes 
-			run tp @s ^ ^ ^${speed}
-		`;
+	yield execute`as @e[tag=${tip.id}] at @s[tag=!sTendril.frozen]`.run( 
+		datapack.internalMcfunction("follow_" + name).set(function * () {
+			// move towards target
+			yield command`
+				execute facing entity @e[tag=${targetId},distance=${chaseDistance}..] eyes 
+				run tp @s ^ ^ ^${speed}
+			`;
 
-		// play movement sound
-		yield command`
-			execute if entity @e[tag=${targetId},distance=${chaseDistance}..] 
-			run playsound minecraft:block.honey_block.slide block @a ~ ~ ~ 1 .5
-		`;
-		
-		if (chaseSpeed != speed) {
-			yield command`execute facing entity @e[tag=${targetId},distance=${speed}..${chaseDistance}] eyes run tp @s ^ ^ ^${chaseSpeed}`;
-		}
-	}).run().buildCommand());
+			// play movement sound
+			yield command`
+				execute if entity @e[tag=${targetId},distance=${chaseDistance}..] 
+				run playsound minecraft:block.honey_block.slide block @a ~ ~ ~ 1 .5
+			`;
+			
+			if (chaseSpeed != speed) {
+				yield command`execute facing entity @e[tag=${targetId},distance=${speed}..${chaseDistance}] eyes run tp @s ^ ^ ^${chaseSpeed}`;
+			}
+		}).run()
+	);
 
 	// reached target
-	yield new CustomCommand(
-		`execute as @e[tag=${targetId}] at @s anchored eyes if entity @e[tag=${tip.id},distance=..${chaseSpeed * 1.2}] ` +
-		`run ` + datapack.internalMcfunction("reached_" + name).set(function * reachTarget() {
+	yield execute`as @e[tag=${targetId}] at @s anchored eyes if entity @e[tag=${tip.id},distance=..${chaseSpeed * 1.2}]`.run(
+		datapack.internalMcfunction("reached_" + name).set(function * reachTarget() {
 			yield command`tp @s ~ ~ ~`;
 			yield * onReach?.() ?? [];
-		}).run().buildCommand()
+		}).run()
 	);
 }
 
@@ -205,27 +206,27 @@ const unfreeze = datapack.internalMcfunction(`unfreeze`)
 
 const playAcquireSound = datapack.internalMcfunction(`playAcquireSound`)
 .set(function * () {
-	yield new Execute().at(tip.selector()).run(
+	yield execute().at(tip.selector()).run(
 		command`playsound minecraft:block.sculk_sensor.clicking block @a ~ ~ ~ 1 0`
 	);
 });
 
 const playDigestSound = datapack.internalMcfunction(`playDigestSound`)
 .set(function * () {
-	yield new Execute().at(tip.selector()).run(
+	yield execute().at(tip.selector()).run(
 		command`playsound minecraft:block.sculk_sensor.hit block @a ~ ~ ~ 1 0`
 	);
 });
 
-const playHitSound = new Execute().at(tip.selector()).run(
+const playHitSound = execute().at(tip.selector()).run(
 	command`playsound minecraft:block.sculk_sensor.break block @a ~ ~ ~ 1 1`
 );
 
-const playBiteSound = new Execute().at(tip.selector()).run(
+const playBiteSound = execute().at(tip.selector()).run(
 	command`playsound minecraft:block.sculk_sensor.break block @a ~ ~ ~ 3 0`
 );
 
-const playIdleSound = new Execute().at(tip.selector()).run(
+const playIdleSound = execute().at(tip.selector()).run(
 	command`playsound minecraft:block.sculk_sensor.clicking_stop block @a ~ ~ ~ 1 0.1`
 );
 
@@ -241,8 +242,7 @@ datapack.internalMcfunction(`locateChicken`)
 .setOnTick(true)
 .set(function*() {
 	// find a chicken target
-	yield new Execute()
-	.at(tip.selector())
+	yield execute().at(tip.selector())
 	.unless(
 		entities`@a`.hasScoreboardTag("sTendril.chickenTarget").exists()
 	)
