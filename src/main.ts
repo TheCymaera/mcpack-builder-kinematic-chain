@@ -114,7 +114,7 @@ datapack.internalMcfunction(`drawChain`)
 });
 
 const moveChain = datapack.internalMcfunction(`moveChain`)
-.set(function * moveChain() {
+.set(function * () {
 	// move each segment to target
 	let target = tip;
 	for (const segment of [...segments].reverse()) {
@@ -157,7 +157,7 @@ function *arc(targetId: string, lift: number) {
 	}
 }
 
-function * follow(
+function *follow(
 	targetId: string, 
 	speed: number, 
 	chaseDistance = speed, 
@@ -188,7 +188,7 @@ function * follow(
 
 	// reached target
 	yield execute`as @e[tag=${targetId}] at @s anchored eyes if entity @e[tag=${tip.id},distance=..${chaseSpeed * 1.2}]`.run(
-		datapack.internalMcfunction("reached_" + name).set(function * reachTarget() {
+		datapack.internalMcfunction("reached_" + name).set(function *() {
 			yield command`tp @s ~ ~ ~`;
 			yield * onReach?.() ?? [];
 		}).run()
@@ -200,7 +200,7 @@ const frozenScoreboardTag = new ScoreboardTag("sTendril.frozen");
 const freeze = frozenScoreboardTag.add(tip.selector());
 
 const unfreeze = datapack.internalMcfunction(`unfreeze`)
-.set(function * unfreeze() {
+.set(function * () {
 	yield frozenScoreboardTag.remove(tip.selector());
 });
 
@@ -232,7 +232,7 @@ const playIdleSound = execute().at(tip.selector()).run(
 
 const scheduleIdleSound = datapack.internalMcfunction("scheduleIdleSound")
 .setOnLoad(true);
-scheduleIdleSound.set(function * idleSound() {
+scheduleIdleSound.set(function * () {
 	yield playIdleSound;
 	yield scheduleIdleSound.scheduleReplace(Duration.seconds(4));
 });
@@ -244,10 +244,10 @@ datapack.internalMcfunction(`locateChicken`)
 	// find a chicken target
 	yield execute().at(tip.selector())
 	.unless(
-		entities`@a`.hasScoreboardTag("sTendril.chickenTarget").exists()
+		entities`@e`.hasScoreboardTag("sTendril.chickenTarget").exists()
 	)
 	.unless(
-		entities`@a`.hasScoreboardTag("sTendril.chickenHeld").exists()
+		entities`@e`.hasScoreboardTag("sTendril.chickenHeld").exists()
 	)
 	.as(
 		entities`@e[type=minecraft:chicken]`.sortNearest().limit(1)
