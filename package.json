@@ -3,6 +3,6 @@
 	"_comment": "For running scripts only.",
 	"scripts": {
 		"build": "deno run --allow-read=pack --allow-write=pack src/main.ts",
-		"symlink": "deno eval 'Deno.symlinkSync(Deno.realPathSync(`pack`), `pack-symlink`)'"
+		"symlink": "deno eval \"Deno.symlinkSync(Deno.realPathSync('pack'),'pack-symlink')\""
 	}
 }

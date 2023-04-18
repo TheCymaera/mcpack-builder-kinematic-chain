@@ -1,11 +1,17 @@
-import { promises as fs } from "node:fs";
-
 export async function emptyFolder(folder: string) {
 	try {
-		await fs.rmdir(folder, { recursive: true });
+		await Deno.stat(folder);
 	} catch {
-		// do nothing
+		return;
 	}
+
+
+	const promises: Promise<unknown>[] = [];
+	for await (const file of Deno.readDir(folder)) {
+		promises.push(Deno.remove(folder + "/" + file.name, { recursive: true }));
+	}
+	
+	await Promise.all(promises);
 }
 
 export function writeFiles(folder: string, files: Iterable<[string, string]>) {
@@ -16,8 +22,8 @@ export function writeFiles(folder: string, files: Iterable<[string, string]>) {
 		const dir = fullPath.split("/").slice(0, -1).join("/");
 
 		promises.push(
-			(dir ? fs.mkdir(dir, { recursive: true }) : Promise.resolve())
-			.then(()=>fs.writeFile(fullPath.toString(), text))
+			(dir ? Deno.mkdir(dir, { recursive: true }) : Promise.resolve())
+			.then(()=>Deno.writeTextFile(fullPath, text))
 		);
 	}
 
