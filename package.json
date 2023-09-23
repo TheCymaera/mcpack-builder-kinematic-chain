@@ -1,8 +1,15 @@
 {
 	"private": true,
+	"type": "module",
 	"_comment": "For running scripts only.",
 	"scripts": {
-		"build": "deno run --allow-read=pack --allow-write=pack src/main.ts",
-		"symlink": "deno eval \"Deno.symlinkSync(Deno.realPathSync('pack'),'pack-symlink')\""
+		"build": "deno run --allow-read=pack --allow-write=pack src/createDatapack.ts",
+		"symlink": "deno run --allow-read --allow-write src/createSymlink.ts"
+	},
+	"devDependencies": {
+		"open-utilities": "^1.0.5"
+	},
+	"dependencies": {
+		"mcpack-builder": "1.0.15-dev.8"
 	}
 }

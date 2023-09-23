@@ -1,0 +1,25 @@
+lockfileVersion: '6.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+dependencies:
+  mcpack-builder:
+    specifier: 1.0.15-dev.8
+    version: 1.0.15-dev.8
+
+devDependencies:
+  open-utilities:
+    specifier: ^1.0.5
+    version: 1.0.5
+
+packages:
+
+  /mcpack-builder@1.0.15-dev.8:
+    resolution: {integrity: sha512-qh7VOX9p9d3DuYQMCWRuQvQydEOACeSoZ8DjE9XxjyK30qy+zhrKdKglkIDEymWAlso758xi3Md4v+RIjTHkXQ==}
+    dev: false
+
+  /open-utilities@1.0.5:
+    resolution: {integrity: sha512-+owKxp+AQH54Q1Tznqz7L76V+JU0rF86BtxHLbfQ2eKwg4dbqjFr73LLXDafbYNSnlzOloYVp8cL2HyIFd4qpg==}
+    dev: true

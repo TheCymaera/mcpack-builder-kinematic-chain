@@ -1,12 +1,10 @@
 {
 	"compilerOptions": {
-		"rootDir": "src",
-		"outDir": "dst",
-		
-		"module": "ESNext",
+		"module": "NodeNext",
 		"target": "ESNext",
 
 		"moduleResolution": "nodenext",
+		"esModuleInterop": true,
 		
 		"strictNullChecks": true,
 		"noImplicitThis": true,
@@ -15,7 +13,6 @@
 		"alwaysStrict": true,
 
 		"isolatedModules": true,
-		"importsNotUsedAsValues": "preserve",
 		
 		"preserveConstEnums": true,
 		"declaration": true,

@@ -1,5 +1,5 @@
-import { Coordinate, Datapack, Namespace, Duration, ScoreboardTag, command, Command, entities, execute } from "npm:mcpack-builder@alpha";
-import { Vector3 } from "npm:open-utilities@1/core/maths/Vector3.js";
+import { Coordinate, Datapack, Namespace, Duration, ScoreboardTag, command, entities, execute, mcfunction, MCFunction, scheduler } from "mcpack-builder";
+import { Vector3 } from "open-utilities/core/maths/Vector3.js";
 import { emptyFolder, writeFiles } from "./fileUtilities.ts";
 
 // output
@@ -8,7 +8,7 @@ const datapack = new Datapack;
 
 // config
 const namespace = new Namespace("kinematic-chain");
-datapack.internalNamespace = namespace.id("internal");
+const internalNamespace = namespace.id("zzz_internal");
 
 const thicknesses = {
 	"thin": 0.0,
@@ -64,9 +64,8 @@ datapack.packMeta = {
 	},
 };
 
-const load = datapack.internalMcfunction(`createChain`)
-.setOnLoad(true)
-.set(function * () {
+const load = mcfunction(function * () {
+	this.label = "load"
 	yield command`kill @e[tag=sTendril]`;
 
 	const location = rootLocation.clone();
@@ -89,17 +88,17 @@ const load = datapack.internalMcfunction(`createChain`)
 	`;
 });
 
-datapack.internalMcfunction(`dedupe`)
-.setOnTick(true)
-.set(function * () {
+datapack.addOnLoadFunction(load);
+
+datapack.addOnTickFunction(mcfunction(function * () {
+	this.label = "dedupe";
 	// due to chunk loading, there can be multiple copies of the chain when the world first loads.
 	yield execute`as @e[tag=sTendril.tip] store result entity @s data.count byte 1 if entity @e[tag=sTendril.tip]`;
-	yield execute`if entity @e[tag=sTendril.tip,nbt=!{data:{count:1b}}]`.run(load.run());
-});
+	yield execute`if entity @e[tag=sTendril.tip,nbt=!{data:{count:1b}}]`.runFunction(load);
+}));
 
-datapack.internalMcfunction(`drawChain`)
-.setOnTick(true)
-.set(function * () {
+datapack.addOnTickFunction(mcfunction(function * () {
+	this.label = "drawChain"
 	 for (const [name, thickness] of Object.entries(thicknesses)) {
 	 	for (let i = 0; i < segmentLength; i += .2) {
 			const radius = thickness / 2;
@@ -111,10 +110,10 @@ datapack.internalMcfunction(`drawChain`)
 			`;
 	 	}
 	 }
-});
+}));
 
-const moveChain = datapack.internalMcfunction(`moveChain`)
-.set(function * () {
+const moveChain = mcfunction(function * () {
+	this.label = "moveChain";
 	// move each segment to target
 	let target = tip;
 	for (const segment of [...segments].reverse()) {
@@ -162,12 +161,14 @@ function *follow(
 	speed: number, 
 	chaseDistance = speed, 
 	chaseSpeed = speed, 
-	onReach?: ()=>Iterable<Command>
+	onReach?: MCFunction
 ) {
 	const name = targetId.replace("sTendril.", "");
 
 	yield execute`as @e[tag=${tip.id}] at @s[tag=!sTendril.frozen]`.run( 
-		datapack.internalMcfunction("follow_" + name).set(function * () {
+		mcfunction(function * () {
+			this.label = "follow_" + name
+
 			// move towards target
 			yield command`
 				execute facing entity @e[tag=${targetId},distance=${chaseDistance}..] eyes 
@@ -187,32 +188,35 @@ function *follow(
 	);
 
 	// reached target
-	yield execute`as @e[tag=${targetId}] at @s anchored eyes if entity @e[tag=${tip.id},distance=..${chaseSpeed * 1.2}]`.run(
-		datapack.internalMcfunction("reached_" + name).set(function *() {
+	yield execute`
+		as @e[tag=${targetId}] 
+		at @s anchored eyes 
+		if entity @e[tag=${tip.id},distance=..${chaseSpeed * 1.2}]
+	`.runFunction(mcfunction(function *() {
+			this.label = "reached_" + name
 			yield command`tp @s ~ ~ ~`;
-			yield * onReach?.() ?? [];
-		}).run()
-	);
+			if (onReach) yield onReach.run();
+	}));
 }
 
 const frozenScoreboardTag = new ScoreboardTag("sTendril.frozen");
 
 const freeze = frozenScoreboardTag.add(tip.selector());
 
-const unfreeze = datapack.internalMcfunction(`unfreeze`)
-.set(function * () {
+const unfreeze = mcfunction(function * () {
+	this.label = "unfreeze";
 	yield frozenScoreboardTag.remove(tip.selector());
 });
 
-const playAcquireSound = datapack.internalMcfunction(`playAcquireSound`)
-.set(function * () {
+const playAcquireSound = mcfunction(function * () {
+	this.label = "playAcquireSound";
 	yield execute().at(tip.selector()).run(
 		command`playsound minecraft:block.sculk_sensor.clicking block @a ~ ~ ~ 1 0`
 	);
 });
 
-const playDigestSound = datapack.internalMcfunction(`playDigestSound`)
-.set(function * () {
+const playDigestSound = mcfunction(function * () {
+	this.label = "playDigestSound";
 	yield execute().at(tip.selector()).run(
 		command`playsound minecraft:block.sculk_sensor.hit block @a ~ ~ ~ 1 0`
 	);
@@ -230,17 +234,17 @@ const playIdleSound = execute().at(tip.selector()).run(
 	command`playsound minecraft:block.sculk_sensor.clicking_stop block @a ~ ~ ~ 1 0.1`
 );
 
-const scheduleIdleSound = datapack.internalMcfunction("scheduleIdleSound")
-.setOnLoad(true);
-scheduleIdleSound.set(function * () {
+const scheduleIdleSound = mcfunction(function * () {
+	this.label = "scheduleIdleSound";
 	yield playIdleSound;
-	yield scheduleIdleSound.scheduleReplace(Duration.seconds(4));
+	yield scheduler.replace(Duration.seconds(4), this);
 });
 
+datapack.addOnLoadFunction(scheduleIdleSound);
 
-datapack.internalMcfunction(`locateChicken`)
-.setOnTick(true)
-.set(function*() {
+
+datapack.addOnTickFunction(mcfunction(function*() {
+	this.label = "locateChicken";
 	// find a chicken target
 	yield execute().at(tip.selector())
 	.unless(
@@ -252,15 +256,16 @@ datapack.internalMcfunction(`locateChicken`)
 	.as(
 		entities`@e[type=minecraft:chicken]`.sortNearest().limit(1)
 	)
-	.run(datapack.internalMcfunction("acquireChicken").set(function * () {
+	.runFunction(mcfunction(function * () {
+		this.label = "acquireChicken";
 		yield command`tag @s add sTendril.chickenTarget`;
 		yield freeze;
-		yield unfreeze.scheduleReplace(Duration.ticks(30));
-		yield playAcquireSound.scheduleReplace(Duration.ticks(20));
-	}).run());
+		yield scheduler.replace(Duration.ticks(30), unfreeze);
+		yield scheduler.replace(Duration.ticks(20), playAcquireSound);
+	}));
 
 
-	yield * follow("sTendril.chickenTarget", moveSpeed, chaseDistance, chaseSpeed, function * () {
+	yield * follow("sTendril.chickenTarget", moveSpeed, chaseDistance, chaseSpeed, mcfunction(function * () {
 		// damage chicken
 		yield command`effect give @e[tag=sTendril.chickenTarget] minecraft:resistance 1 100 true`;
 		yield command`effect give @e[tag=sTendril.chickenTarget] minecraft:instant_damage 1 0 true`;
@@ -274,16 +279,15 @@ datapack.internalMcfunction(`locateChicken`)
 		
 		// freeze
 		yield freeze;
-		yield unfreeze.scheduleReplace(Duration.ticks(10));
-	});
-});
+		yield scheduler.replace(Duration.ticks(10), unfreeze);
+	}));
+}));
 
 
 
 
-datapack.internalMcfunction(`locateMouth`)
-.setOnTick(true)
-.set(function * () {
+datapack.addOnTickFunction(mcfunction(function * () {
+	this.label = "locateMouth";
 	yield command`kill @e[tag=sTendril.mouthTarget]`;
 
 	yield command`
@@ -293,21 +297,20 @@ datapack.internalMcfunction(`locateMouth`)
 	`;
 
 	yield * arc("sTendril.mouthTarget", 3);
-	yield * follow("sTendril.mouthTarget", moveSpeed, undefined, undefined, function * () {
+	yield * follow("sTendril.mouthTarget", moveSpeed, undefined, undefined, mcfunction(function * () {
 		yield command`kill @e[tag=sTendril.chickenHeld]`;
 		yield command`kill @e[type=minecraft:item,nbt={Item:{id:"minecraft:chicken"}}]`;
 		yield playBiteSound;
-		yield playDigestSound.scheduleReplace(Duration.ticks(20));
-	});
+		yield scheduler.replace(Duration.ticks(20), playDigestSound);
+	}));
 
 	// tp chicken to tip
 	yield command`execute as @e[tag=${tip.id}] at @s run tp @e[tag=sTendril.chickenHeld] ~ ~-.6 ~`;
-});
+}));
 
 
-datapack.internalMcfunction(`locateCarrot`)
-.setOnTick(true)
-.set(function * () {
+datapack.addOnTickFunction(mcfunction(function * () {
+	this.label = "locateCarrot";
 	yield command`kill @e[tag=sTendril.carrotTarget]`;
 	yield command`
 		execute as @p[nbt={SelectedItem:{id:"minecraft:carrot_on_a_stick"}}] at @s run 
@@ -318,12 +321,14 @@ datapack.internalMcfunction(`locateCarrot`)
 	yield * follow("sTendril.carrotTarget", carrotFollowSpeed);
 
 	yield moveChain.run();
-});
+}));
 
 
 
 
 console.log("Writing files...");
 await emptyFolder(outputPath);
-await writeFiles(outputPath, datapack.build().files);
+await writeFiles(outputPath, datapack.build({
+	internalNamespace
+}).files);
 console.log("Complete!");
